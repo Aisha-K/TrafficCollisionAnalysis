@@ -1,7 +1,9 @@
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 plt.style.use('seaborn-white')
+
 
 #-----------#---------#---------#----------Vars
 col_list_categorical=['SPEEDING','AG_DRIV','ALCOHOL','DISABILITY']
@@ -11,6 +13,8 @@ mapping={'unknown':0,'0 to 4':1, '5 to 9':2,'10 to 14':3, '15 to 19':4,'20 to 24
 '85 to 89':20,'90 to 94':21,'Over 95':22}
 
 mapping2={'other':'unknown', '':'unknown', r'^\s*$':'unknown'}
+
+mapping3={'None':0,'Minimal':1,'Major':2,'Fatal':3, '':0}
 
 inv_type_unwanted=['Witness','Pedestrian - Not Hit', 'Trailer Owner', 'In-Line Skater', 'Wheelchair','Driver - Not Hit', 'Runaway - No Driver', 
 '','Other','Cyclist Passenger','Moped Driver','Motorcycle Passenger', None]
@@ -44,6 +48,7 @@ for col_r in col_list_categorical:
         inv_df[col_r].replace({'Yes':1,'No':0, r'^\s*$':0}, regex=True, inplace=True) #blanks
 
 inv_df['MANOEUVER'].replace(['Other','',r'^\s*$' ], 'Unknown', inplace=True, regex=True) 
+inv_df['ROAD_CLASS'].replace(['Pending','',r'^\s*$' ], 'Other', inplace=True, regex=True) 
 
 #dropping unwanted rows
 inv_df['INVTYPE'].replace(r'^\s*$', np.nan, regex=True, inplace=True)
@@ -52,6 +57,12 @@ drop_rows(inv_df, 'INVTYPE', inv_type_unwanted)
 
 #mapping age categories to ordered ints
 inv_df.replace({'INVAGE':mapping}, inplace=True)
+#inv_df.replace({'INJURY':mapping3}, inplace=True)
+
+
+#convert columns to appropriate types with astype()
+inv_df.INVAGE.astype('int32', copy=False)
+inv_df.INVTYPE.astype(str)
 
 print(inv_df.head())
 print('\n')
@@ -204,8 +215,13 @@ plt.show()
 print('\n\nALL COLUMNS')
 print(list(inv_df))
 
-for l in list(inv_df):
-    print(freq_counts(l,inv_df))
+def print_freq():
+   for l in list(inv_df):
+       if (l !='LONGITUDE') & (l!='LATITUDE'):
+            print(freq_counts(l,inv_df))
+            print('\n')
+
+#print_freq()
 
 #------------------------------------#TODO 
 
@@ -217,3 +233,30 @@ for l in list(inv_df):
 
 
 #accident rate based on density of location, w/ other city datasets
+
+#-----------------------------------Very quickly made random forest model, basic test, NOT TO BE USED FOR ANYTHNG
+
+from sklearn.preprocessing import LabelEncoder
+import sklearn.model_selection as ms
+from sklearn.ensemble import RandomForestRegressor 
+
+rf_df=inv_df.drop( ['LATITUDE','LONGITUDE','DATE','ACCNUM'], axis=1)
+rf_df=rf_df.dropna()
+print(rf_df.head())
+
+def RF(): 
+    lblE=LabelEncoder()
+    for i in rf_df:
+        if rf_df[i].dtype==type(object):
+            print(i)
+            lblE.fit(rf_df[i].astype(str))
+            rf_df[i]=lblE.transform(rf_df[i])
+
+    x_train, x_test, y_train, y_test= ms.train_test_split(rf_df.drop('INJURY', axis=1), rf_df.INJURY, test_size=0.30, random_state=42)
+
+    m=RandomForestRegressor(n_estimators=50)
+    m.fit(x_train, y_train)
+    print(m.score(x_test, y_test))
+    print(m.predict([[15, 1,0, 1, 1,0,9,0,0,0,0,0,0,126], [15, 1,0, 1, 1,0,24,0,0,0,0,0,0,17]]))
+
+RF()
