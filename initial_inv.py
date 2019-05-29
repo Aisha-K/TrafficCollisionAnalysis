@@ -3,26 +3,54 @@ import pandas as pd
 import matplotlib.pyplot as plt
 plt.style.use('seaborn-white')
 
+#-----------#---------#---------#----------Vars
+col_list_categorical=['SPEEDING','AG_DRIV','ALCOHOL','DISABILITY']
 
-
-#-----------#---------#---------#----------DATA CLEANING
-orig_df=pd.read_excel('KSI_data.xlsx')
-
-#dropping unnecessary columns
-inv_df=orig_df.drop(orig_df.columns[1:20], axis=1)
-inv_df.drop(inv_df.columns[14:21], axis=1, inplace=True)
-inv_df.drop(['Hood_ID', 'Division','REDLIGHT','INITDIR','ObjectId','VEHTYPE'], axis=1, inplace=True)
-
-#filling in blanks/replacing
-inv_df['INJURY'].replace(r'^\s*$',np.nan, regex=True, inplace=True)
-col_list=['SPEEDING','AG_DRIV','ALCOHOL','DISABILITY']
-for col_r in col_list:
-        inv_df[col_r].replace({'Yes':1,'No':0, r'^\s*$':0}, regex=True, inplace=True)
-
-#mapping age categories to ordered ints
 mapping={'unknown':0,'0 to 4':1, '5 to 9':2,'10 to 14':3, '15 to 19':4,'20 to 24':5, '25 to 29':6,'30 to 34':7, '35 to 39':8,'40 to 44':9, 
 '45 to 49':10, '50 to 54':11, '55 to 59':12,'60 to 64':13,'65 to 69':14,'70 to 74':15,'75 to 79':16,'70 to 74':17,'75 to 79':18,'80 to 84':19,
 '85 to 89':20,'90 to 94':21,'Over 95':22}
+
+mapping2={'other':'unknown', '':'unknown', r'^\s*$':'unknown'}
+
+inv_type_unwanted=['Witness','Pedestrian - Not Hit', 'Trailer Owner', 'In-Line Skater', 'Wheelchair','Driver - Not Hit', 'Runaway - No Driver', 
+'','Other','Cyclist Passenger','Moped Driver','Motorcycle Passenger', None]
+
+colors_five=['#E13F29', 'lightseagreen','lightskyblue', 'lightyellow', 'limegreen']
+
+col_unwanted=['Division','INITDIR','ObjectId','VEHTYPE','YEAR','TIME','STREET1','STREET2','OFFSET','District','ACCLOC','LIGHT','LOCCOORD', 'RDSFCOND','VISIBILITY']
+
+##-----------#---------#---------#----------DATA CLEANING FUNCTIONS
+
+def drop_rows(df, column, row_vals, regex_b=False):
+    new_df = df   
+    #dataframe dropna won't replace empty values only NaN and NaT so convert blank space to NaN then drop
+    new_df[column].replace(row_vals, np.nan, inplace=True, regex=regex_b) #dropna will take care of np.nan
+    new_df = new_df.dropna(subset=[column])
+    return new_df
+
+def drop_unwanted(orig_df):
+        inv_df=orig_df.drop(orig_df.columns[26:41], axis=1)
+        inv_df.drop(col_unwanted, axis=1, inplace=True)
+        #inv_df.drop(['Division','REDLIGHT','INITDIR','ObjectId','VEHTYPE'], axis=1, inplace=True)
+        return inv_df
+
+#-----------#---------#---------#----------DATA CLEANING
+orig_df=pd.read_excel('KSI_data.xlsx')
+inv_df=drop_unwanted(orig_df)
+
+#filling in blanks/replacing
+inv_df['INJURY'].replace(r'^\s*$',np.nan, regex=True, inplace=True) #blanks
+for col_r in col_list_categorical:
+        inv_df[col_r].replace({'Yes':1,'No':0, r'^\s*$':0}, regex=True, inplace=True) #blanks
+
+inv_df['MANOEUVER'].replace(['Other','',r'^\s*$' ], 'Unknown', inplace=True, regex=True) 
+
+#dropping unwanted rows
+inv_df['INVTYPE'].replace(r'^\s*$', np.nan, regex=True, inplace=True)
+drop_rows(inv_df, 'INVTYPE', inv_type_unwanted)
+
+
+#mapping age categories to ordered ints
 inv_df.replace({'INVAGE':mapping}, inplace=True)
 
 print(inv_df.head())
@@ -34,7 +62,6 @@ print('\n')
 #counts the number of occurences of unique values in a column, shown as a bar graph
 def frequency_counts_graph(col_name, df, sort=False):
     temp=freq_counts(col_name,inv_df, sort)
-
     plt.figure()
     plt.title(col_name)
     temp.plot(kind='bar')
@@ -65,37 +92,40 @@ def injury_by_cat(col, df, sort=False):
         counts_df.plot(kind='bar')
         x=x+1
 
+
+
 #breaks down a category into injury types (pie chart for each item in var types, displaying injuries as percentages)
 #types is an array containting unique values from a column given by var cat
-def cat_by_injury(cat, types):
-    x=1
+def cats_split_into_injuries(cat, types, inv_df=inv_df, grid_l=3):
+    pos=1
     fig=plt.figure()
+    plt.title(cat)
 
     for i_type in types:
 
         temp_df=inv_df.loc[inv_df[cat]==i_type]
         counts_df=freq_counts('INJURY',temp_df, True)
 
-        fig.add_subplot(3,3,x)
+        fig.add_subplot(grid_l,grid_l,pos)
         plt.title(i_type)
-        colors=['#E13F29', 'lightseagreen','lightskyblue', 'lightyellow', 'limegreen']
+        colors=colors_five
 
         plt.pie(
             counts_df.as_matrix(),  #value_counts returns a series, so need to use as_matrix for array rep
             labels=counts_df.index.values,
             colors=colors,
             startangle=90,
-            autopct='%1.1f%%',
-            explode=(0,0,0,0,0)
+            autopct='%1.1f%%'#,
+            #explode=(0,0,0,0,0)
         )
         plt.axis('equal')
         plt.tight_layout()
 
-        x=x+1
+        pos=pos+1
 
 
 #each vehicle is a new graph, each graph has the age as the x axis, counts as the y, and color showing injury types
-def injury_by_age_invtype():
+def injury_by_age_invtype(inv_df=inv_df):
     inv_types=['Driver','Pedestrian','Cyclist','Motorcycle Driver','Passenger']
     x=1
     fig=plt.figure()
@@ -119,10 +149,16 @@ def injury_by_age_invtype():
               
         plt.legend(loc='best')
 
-#returns a multi line graph mapping frequency of the col in cols equaling 1, over age      
-def binary_cols_over_age(cols, df, ):
-    print()
 
+
+#plots longitude and latitude for the soecfied inv types
+def scatter_inv_type(df, inv_types):
+    fig=plt.figure()
+
+    for i_type in inv_types:
+        temp_df=df.loc[df['INVTYPE']==i_type]        
+        plt.scatter(temp_df['LONGITUDE'], temp_df['LATITUDE'], alpha=0.5, s=2)
+    plt.legend(loc='best')
 
 
 #------#---------#---------#------------DISPLAY
@@ -132,21 +168,35 @@ def display_freq_graphs():
         frequency_counts_graph('INJURY', inv_df, False)
         frequency_counts_graph('INVAGE', inv_df, True)
         frequency_counts_graph('SPEEDING', inv_df, True)
-        frequency_counts_graph('MANOEUVER', inv_df, True)
+        frequency_counts_graph('MANOEUVER', inv_df, False)
 
 
-for key, grp in inv_df.groupby(['INVTYPE']):
-        print(freq_counts('MANOEUVER', grp, True).rename(key))
+
+#for key, grp in inv_df.groupby(['INVTYPE']):
+        #print(freq_counts('MANOEUVER', grp, True).rename(key))
+
+
+def display_injury_percentages():
+    cats_split_into_injuries('INVTYPE', ['Driver','Pedestrian','Cyclist','Motorcycle Driver','Passenger'])
+    cats_split_into_injuries('MANOEUVER',inv_df['MANOEUVER'].unique() , inv_df, 4)
+    cats_split_into_injuries('ALCOHOL',[1,0], inv_df, 2 )
+    cats_split_into_injuries('AG_DRIV', [1,0] , inv_df, 2)
+    cats_split_into_injuries('SPEEDING', [1,0] , inv_df, 2)
+    cats_split_into_injuries('DISABILITY', [1,0] , inv_df, 2)
+    cats_split_into_injuries('ROAD_CLASS', inv_df['ROAD_CLASS'].unique() , inv_df, 4)
+
 
 
 #display_freq_graphs()
-
 #injury_by_cat('INVAGE', inv_df,True)
-#injury_by_cat('DRIVCOND', inv_df)
-
-#cat_by_injury('INVTYPE', ['Driver','Pedestrian','Cyclist','Motorcycle Driver','Passenger'])
-
+#injury_by_cat('Hood_ID', inv_df)
+#display_injury_percentages()
 #injury_by_age_invtype()
+#scatter_inv_type(inv_df, ['Cyclist', 'Pedestrian', 'Motorcycle'])
+
+
+#print(inv_df['ROAD_CLASS'].value_counts())
+#print(inv_df['TRAFFCTL'].value_counts())
 
 plt.show()
 
@@ -154,9 +204,16 @@ plt.show()
 print('\n\nALL COLUMNS')
 print(list(inv_df))
 
+for l in list(inv_df):
+    print(freq_counts(l,inv_df))
 
-#maneouver and inv type
-#maneouvre and injury type
-#speeding, ag_driving, alcohol by age
-#inv type, zone id, and injury type counts w/ total
-#unsupervised clustering
+#------------------------------------#TODO 
+
+#inv type, zone id, and injury type counts
+
+#supervised clustering for injury types
+        #USING COLS: [INVTYPE, MANOEUVER, INVAGE, ALCOHOL, DISABILITY, ]
+        # road class?, hood
+
+
+#accident rate based on density of location, w/ other city datasets
