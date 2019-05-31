@@ -14,7 +14,7 @@ mapping={'unknown':0,'0 to 4':1, '5 to 9':2,'10 to 14':3, '15 to 19':4,'20 to 24
 
 mapping2={'other':'unknown', '':'unknown', r'^\s*$':'unknown'}
 
-mapping3={'None':0,'Minimal':1,'Major':2,'Fatal':3, '':0}
+mapping3={'None':0,'Minimal':1, 'Minor':1,'Major':2,'Fatal':3, '':0, np.nan:0}
 
 inv_type_unwanted=['Witness','Pedestrian - Not Hit', 'Trailer Owner', 'In-Line Skater', 'Wheelchair','Driver - Not Hit', 'Runaway - No Driver', 
 '','Other','Cyclist Passenger','Moped Driver','Motorcycle Passenger', None]
@@ -57,11 +57,12 @@ drop_rows(inv_df, 'INVTYPE', inv_type_unwanted)
 
 #mapping age categories to ordered ints
 inv_df.replace({'INVAGE':mapping}, inplace=True)
-#inv_df.replace({'INJURY':mapping3}, inplace=True)
+inv_df.replace({'INJURY':mapping3}, inplace=True)
 
 
 #convert columns to appropriate types with astype()
 inv_df.INVAGE.astype('int32', copy=False)
+inv_df.INJURY.astype('int32', copy=False)
 inv_df.INVTYPE.astype(str)
 
 print(inv_df.head())
@@ -252,11 +253,20 @@ def RF():
             lblE.fit(rf_df[i].astype(str))
             rf_df[i]=lblE.transform(rf_df[i])
 
-    x_train, x_test, y_train, y_test= ms.train_test_split(rf_df.drop('INJURY', axis=1), rf_df.INJURY, test_size=0.30, random_state=42)
+    x_train, x_test, y_train, y_test= ms.train_test_split(rf_df.drop('INJURY', axis=1), rf_df.INJURY, test_size=0.33, random_state=42)
 
-    m=RandomForestRegressor(n_estimators=50)
+    m=RandomForestRegressor(n_estimators=50, oob_score=True)
     m.fit(x_train, y_train)
+    print('\n R^2')
     print(m.score(x_test, y_test))
-    print(m.predict([[15, 1,0, 1, 1,0,9,0,0,0,0,0,0,126], [15, 1,0, 1, 1,0,24,0,0,0,0,0,0,17]]))
+    print('\n FEATURE IMPORTANCE')
+    print(m.feature_importances_)
+    print('\n OOB_SCORE:')
+    print(m.oob_score_)
+
+    print('\n TESTING FIRST TEN PREDICTONS')
+    print(m.predict(x_test.head(10)))
+    print(y_test.head(10))
+
 
 RF()
